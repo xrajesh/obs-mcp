@@ -1,0 +1,109 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  labels:
+    app.kubernetes.io/name: minio
+  name: minio
+  namespace: obs-mcp-loki
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio
+  namespace: obs-mcp-loki
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: minio
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: minio
+    spec:
+      containers:
+        - command:
+            - /bin/sh
+            - -c
+            - |
+              mkdir -p /storage/loki-chunks /storage/loki-ruler /storage/loki-admin && \
+              minio server /storage
+          env:
+            - name: MINIO_ACCESS_KEY
+              value: loki
+            - name: MINIO_SECRET_KEY
+              value: supersecret
+          image: docker.io/minio/minio
+          name: minio
+          ports:
+            - containerPort: 9000
+          volumeMounts:
+            - mountPath: /storage
+              name: storage
+      volumes:
+        - name: storage
+          persistentVolumeClaim:
+            claimName: minio
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+  namespace: obs-mcp-loki
+spec:
+  ports:
+    - port: 9000
+      protocol: TCP
+      targetPort: 9000
+  selector:
+    app.kubernetes.io/name: minio
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: loki-storage
+  namespace: obs-mcp-loki
+stringData:
+  endpoint: http://minio:9000
+  bucketnames: loki-chunks,loki-ruler,loki-admin
+  access_key_id: loki
+  access_key_secret: supersecret
+  region: us-east-1
+type: Opaque
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-create-loki-buckets
+  namespace: obs-mcp-loki
+spec:
+  backoffLimit: 4
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: mc
+          image: docker.io/minio/mc
+          command: ["/bin/sh", "-c"]
+          env:
+            - name: MC_CONFIG_DIR
+              value: /tmp/.mc
+          args:
+            - |
+              set -e
+              mkdir -p "${MC_CONFIG_DIR}"
+              until mc alias set local http://minio:9000 loki supersecret; do
+                echo "waiting for minio..."
+                sleep 2
+              done
+              mc mb -p local/loki-chunks || true
+              mc mb -p local/loki-ruler || true
+              mc mb -p local/loki-admin || true

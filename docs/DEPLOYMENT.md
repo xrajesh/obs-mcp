@@ -4,7 +4,7 @@ This guide covers authentication modes and deploying obs-mcp on Kubernetes/OpenS
 
 ## Authentication Modes
 
-The `--auth-mode` flag controls how obs-mcp obtains bearer tokens for **Prometheus/Thanos** and, when the **traces** toolset is enabled, for **Tempo** gateways:
+The `--auth-mode` flag controls how obs-mcp obtains bearer tokens for **Prometheus/Thanos**, **Alertmanager**, and (when enabled) **Loki** and **Tempo** endpoints:
 
 | Mode             | Token Source                                                                   | Use Case                                              |
 |------------------|--------------------------------------------------------------------------------|-------------------------------------------------------|
@@ -23,6 +23,7 @@ The `--auth-mode` flag controls how obs-mcp obtains bearer tokens for **Promethe
 
 - Reads the service account token mounted inside the pod
 - Requires explicit `PROMETHEUS_URL` (no auto-discovery)
+- If `logs` toolset is enabled, either set `LOKI_URL`/`--loki-url` or use LokiStack discovery parameters (`lokiNamespace`, `lokiName`)
 - The ServiceAccount must have RBAC permissions to query the metrics endpoint
 - Best for: **In-cluster deployment** on OpenShift with RBAC-protected Thanos/Prometheus
 
@@ -31,6 +32,7 @@ The `--auth-mode` flag controls how obs-mcp obtains bearer tokens for **Promethe
 - Forwards the `Authorization` header from incoming MCP client requests to Prometheus
 - If no header is provided, connects without authentication
 - Requires explicit `PROMETHEUS_URL` (no auto-discovery)
+- If `logs` toolset is enabled, either set `LOKI_URL`/`--loki-url` or use LokiStack discovery parameters (`lokiNamespace`, `lokiName`)
 - Best for: **Pass-through auth** scenarios or **Prometheus without authentication** (e.g., port-forwarded, local kube-prometheus)
 
 ## Deploying on a Cluster
@@ -108,10 +110,11 @@ manifests/
 When deploying in-cluster, you must configure:
 
 1. **`PROMETHEUS_URL`**: Set the environment variable to your Prometheus/Thanos endpoint
-2. **`--auth-mode`**: Choose based on your Prometheus authentication requirements:
+2. **`LOKI_URL`**: Optional when using the `logs` toolset (or pass `--loki-url`). If omitted, use LokiStack discovery (`loki_list_instances` + `lokiNamespace`/`lokiName` tool arguments)
+3. **`--auth-mode`**: Choose based on your backend authentication requirements:
    - `serviceaccount` if your Prometheus requires RBAC/token auth
    - `header` if your Prometheus doesn't require authentication
-3. **ServiceAccount RBAC**: If using `serviceaccount` mode, ensure the ServiceAccount has permissions to query your metrics endpoint
+4. **ServiceAccount RBAC**: If using `serviceaccount` mode, ensure the ServiceAccount has permissions to query your metrics/logs endpoints
 
 ### Configuring the Prometheus URL
 
@@ -124,7 +127,7 @@ The metrics backend URL is determined in the following order:
 > [!NOTE]
 >
 > Auto-discovery only works in `kubeconfig` mode. For `serviceaccount` and `header` modes, the server
-> will fail at startup if `PROMETHEUS_URL` is not set. The same applies to `ALERTMANAGER_URL`.
+> will fail at startup if `PROMETHEUS_URL` is not set. The same applies to `ALERTMANAGER_URL` when alert tools are used.
 
 ### Guardrails and Thanos Compatibility
 
@@ -159,5 +162,15 @@ Optional MCP tools query [Grafana Tempo](https://grafana.com/docs/tempo/latest/)
 
 Optional MCP tools assist with [OpenTelemetry Collector](https://opentelemetry.io/docs/collector/) configuration: listing components, fetching JSON schemas, validating configs, and listing supported versions (see [TOOLS.md](../TOOLS.md) for tool names).
 
-- **Enable:** pass `--toolsets otelcol` or include it alongside other toolsets (e.g. `--toolsets metrics,traces,otelcol`). The default is `metrics` only. Example `Deployment` manifests under `manifests/core/deploy/` already enable all three toolsets.
+- **Enable:** pass `--toolsets otelcol` or include it alongside other toolsets (e.g. `--toolsets metrics,logs,traces,otelcol`). The default is `metrics` only. Example `Deployment` manifests under `manifests/core/deploy/` already enable all four toolsets.
 - **Dependencies:** none — component schemas are embedded in the binary; no cluster-side Collector instance is required.
+
+## Logs (Loki) toolset
+
+Optional MCP tools query [Loki](https://grafana.com/oss/loki/) log APIs (see [TOOLS.md](../TOOLS.md) for tool names).
+
+- **Enable:** pass `--toolsets metrics,logs` (or `metrics,logs,traces`).
+- **Configuration:** provide Loki URL with `--loki-url` or `LOKI_URL`, or discover LokiStack instances via the Loki Operator.
+- **Discovery:** use `loki_list_instances` to list `LokiStack` CRs (`loki.grafana.com/v1`) and then pass `lokiNamespace` + `lokiName` to query tools.
+- **Routes:** use `--loki.use-route` to resolve LokiStack gateway Route (`<name>-gateway-http`) instead of in-cluster service DNS.
+- **Auth:** uses the same `--auth-mode` token strategy as metrics/traces.

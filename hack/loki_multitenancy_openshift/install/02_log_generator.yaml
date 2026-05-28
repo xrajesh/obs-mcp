@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: obs-mcp-log-generator
+  namespace: obs-mcp-loki
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: obs-mcp-log-generator
+  template:
+    metadata:
+      labels:
+        app: obs-mcp-log-generator
+    spec:
+      containers:
+        - name: logger
+          image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+          command: ["/bin/sh", "-c"]
+          env:
+            - name: TENANT_ID
+              value: network
+          args:
+            - |
+              i=0
+              while true; do
+                ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+                echo "{\"level\":\"info\",\"msg\":\"obs-mcp-loki-hack\",\"tenant\":\"${TENANT_ID}\",\"seq\":${i},\"ts\":\"${ts}\"}"
+                i=$((i+1))
+                sleep 2
+              done
