@@ -265,9 +265,14 @@ phase_extras() {
 phase_upload() {
     phase "upload"
 
-    if [ "${PROFILE}" == "kind" ]; then
-        step "Loading obs-mcp image into Kind cluster '${KIND_CLUSTER_NAME}'"
-        if [ -n "${IMAGE_REF:-}" ]; then
+    if [ -z "${IMAGE_REF:-}" ]; then
+        info "IMAGE_REF not set, skipping image upload."
+        return
+    fi
+
+    case "${PROFILE}" in
+        kind)
+            step "Loading obs-mcp image into Kind cluster '${KIND_CLUSTER_NAME}'"
             if [ "${CONTAINER_CLI}" == "podman" ]; then
                 mkdir -p "${ROOT_DIR}/tmp"
                 _run "${CONTAINER_CLI}" save --quiet -o "${ROOT_DIR}/tmp/obs-mcp.tar" "${IMAGE_REF}"
@@ -276,12 +281,60 @@ phase_upload() {
             else
                 _run kind load docker-image --name "${KIND_CLUSTER_NAME}" "${IMAGE_REF}"
             fi
-        else
-            info "IMAGE_REF not set, skipping image loading."
-        fi
-    else
-        info "Image upload not supported for profile '${PROFILE}', skipping."
-    fi
+            ;;
+        openshift)
+            step "Pushing obs-mcp image to OpenShift internal registry"
+
+            if ! command -v skopeo >/dev/null; then
+                fail "skopeo is needed for the upload functionality to work"
+            fi
+
+            # Derive the image tag from IMAGE_REF (use the tag portion, or fall back to 'latest')
+            local _img_tag
+            _img_tag=${IMAGE_REF##*:}
+            if [ "${_img_tag}" == "${IMAGE_REF}" ]; then
+               # no substitution = tag not found, use latest;
+               _img_tag="latest"
+            fi
+
+            # Enable the default external route for the image registry (idempotent)
+            _run oc patch configs.imageregistry.operator.openshift.io/cluster \
+                --patch '{"spec":{"defaultRoute":true}}' --type=merge
+
+            # Retrieve the external registry hostname
+            local _ext_registry
+            _ext_registry=$(oc get route default-route \
+                -n openshift-image-registry \
+                --template='{{ .spec.host }}')
+            info "External registry route: ${_ext_registry}"
+
+            # Save the image to a tar archive so that skopeo can use the
+            # docker-archive: transport, which avoids the docker-daemon: transport's
+            # hard-coded /var/tmp dependency (may not exist in all environments).
+            local _tmp_tar
+            _tmp_tar=$(mktemp -t obs-mcp-XXXXXX.tar)
+            _run "${CONTAINER_CLI}" save "${IMAGE_REF}" -o "${_tmp_tar}"
+
+            # Copy directly with skopeo — no separate login or tag step needed.
+            # The token is fed via an anonymous pipe (<(...)) so it never touches
+            # disk and is not logged by run_info (only /dev/fd/N appears in args).
+            _run skopeo --insecure-policy copy \
+                --dest-tls-verify=false \
+                --dest-authfile <(printf '{"auths":{"%s":{"auth":"%s"}}}' \
+                    "${_ext_registry}" \
+                    "$(printf 'unused:%s' "$(oc whoami -t)" | base64 -w0)") \
+                "docker-archive:${_tmp_tar}" \
+                "docker://${_ext_registry}/obs-mcp/obs-mcp:${_img_tag}"
+            rm -f "${_tmp_tar}"
+
+            # Override IMAGE_REF to the in-cluster registry address used by the deployment
+            IMAGE_REF="image-registry.openshift-image-registry.svc:5000/obs-mcp/obs-mcp:${_img_tag}"
+            info "Updated IMAGE_REF for deployment: ${IMAGE_REF}"
+            ;;
+        *)
+            info "Image upload not supported for profile '${PROFILE}', skipping."
+            ;;
+    esac
 }
 
 phase_deploy() {

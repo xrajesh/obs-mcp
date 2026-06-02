@@ -158,7 +158,7 @@ test-e2e-setup-extras: ## Add more sources for the signals
 	./hack/e2e/setup.sh extras --profile $(E2E_PROFILE)
 
 .PHONY: test-e2e-deploy
-test-e2e-deploy: container ## Build and deploy obs-mcp to Kind cluster
+test-e2e-deploy: container ## Build and deploy obs-mcp to the cluster
 	./hack/e2e/setup.sh upload deploy --profile $(E2E_PROFILE)
 
 .PHONY: test-e2e
