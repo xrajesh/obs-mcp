@@ -3,8 +3,8 @@ package main
 import (
 	"testing"
 
+	"github.com/rhobs/obs-mcp/pkg/auth"
 	"github.com/rhobs/obs-mcp/pkg/k8s"
-	"github.com/rhobs/obs-mcp/pkg/mcp"
 )
 
 // TestParseMetricsBackend verifies the --metrics-backend flag parsing logic
@@ -81,27 +81,27 @@ func TestDetermineMetricsBackendURL_RequiresURLForNonKubeconfigModes(t *testing.
 
 	tests := []struct {
 		name     string
-		authMode mcp.AuthMode
+		authMode auth.AuthMode
 		backend  k8s.MetricsBackend
 	}{
 		{
 			name:     "serviceaccount mode with thanos backend",
-			authMode: mcp.AuthModeServiceAccount,
+			authMode: auth.AuthModeServiceAccount,
 			backend:  k8s.MetricsBackendThanos,
 		},
 		{
 			name:     "serviceaccount mode with prometheus backend",
-			authMode: mcp.AuthModeServiceAccount,
+			authMode: auth.AuthModeServiceAccount,
 			backend:  k8s.MetricsBackendPrometheus,
 		},
 		{
 			name:     "header mode with thanos backend",
-			authMode: mcp.AuthModeHeader,
+			authMode: auth.AuthModeHeader,
 			backend:  k8s.MetricsBackendThanos,
 		},
 		{
 			name:     "header mode with prometheus backend",
-			authMode: mcp.AuthModeHeader,
+			authMode: auth.AuthModeHeader,
 			backend:  k8s.MetricsBackendPrometheus,
 		},
 	}
@@ -123,10 +123,10 @@ func TestDetermineMetricsBackendURL_EnvVarOverridesAll(t *testing.T) {
 	customURL := "https://custom-prometheus.example.com:9090"
 	t.Setenv("PROMETHEUS_URL", customURL)
 
-	authModes := []mcp.AuthMode{
-		mcp.AuthModeKubeConfig,
-		mcp.AuthModeServiceAccount,
-		mcp.AuthModeHeader,
+	authModes := []auth.AuthMode{
+		auth.AuthModeKubeConfig,
+		auth.AuthModeServiceAccount,
+		auth.AuthModeHeader,
 	}
 
 	for _, authMode := range authModes {
