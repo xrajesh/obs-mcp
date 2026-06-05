@@ -7,6 +7,7 @@ metadata:
   runs: 1
   labels:
     category: otelcol
+    suite: observability
     toolType: components
   description: |
     Tests if the agent can list available OpenTelemetry Collector components.
