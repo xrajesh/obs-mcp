@@ -176,14 +176,24 @@ fi
 echo "==> Checking obs-mcp health at ${mcp_health_url}"
 if ! curl -sf --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_HEALTH_MAX_TIME}" "${mcp_health_url}" >/dev/null; then
   echo "ERROR: obs-mcp is not reachable."
-  echo "Start it in another terminal, for example:"
-  echo "  go run ./cmd/obs-mcp --listen 127.0.0.1:9100 --toolsets logs --auth-mode kubeconfig --insecure --loki.use-route"
-  if [[ -z "${GATEWAY_ROUTE}" ]]; then
-    echo "If no Route exists, omit --loki.use-route and port-forward Loki:"
-    echo "  oc port-forward -n ${STACK_NS} svc/${GATEWAY_SVC} 8080:8080"
-    echo "  go run ./cmd/obs-mcp --listen 127.0.0.1:9100 --toolsets logs --auth-mode kubeconfig --insecure --loki-url http://127.0.0.1:8080"
-  fi
-  exit 1
+	echo "Start it in another terminal, for example:"
+	echo "  make run-obs-mcp-server LOKI_EVAL_TOOLSETS=logs"
+	echo "  # or:"
+	echo "  go run ./cmd/obs-mcp --listen 127.0.0.1:9100 --toolsets logs --auth-mode kubeconfig --insecure --loki.use-route"
+	if [[ -z "${GATEWAY_ROUTE}" ]]; then
+		echo "If no Route exists, omit --loki.use-route and port-forward Loki:"
+		echo "  oc port-forward -n ${STACK_NS} svc/${GATEWAY_SVC} 8080:8080"
+		echo "  make run-obs-mcp-server LOKI_USE_ROUTE=false LOKI_URL=http://127.0.0.1:8080"
+		echo "  # or: go run ./cmd/obs-mcp ... --loki-url http://127.0.0.1:8080"
+	fi
+	if [[ "${SKIP_MCP_CHECKS:-}" == "1" ]]; then
+		echo ""
+		echo "SKIP_MCP_CHECKS=1: LokiStack setup complete. Start obs-mcp, then run:"
+		echo "  make verify-loki-evals"
+		echo "  make run-mcpchecker-eval CATEGORY=logs EVAL_CONFIG=eval-logs.yaml"
+		exit 0
+	fi
+	exit 1
 fi
 
 mcp_parse_sse() {

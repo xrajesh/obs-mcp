@@ -62,12 +62,13 @@ PROFILE="kind"
 STACKS="prometheus,tempo"
 SUPPORTED_PHASES=(provision prereqs extras upload deploy clean unprovision)
 SUPPORTED_PROFILES=(kind k8s openshift)
-SUPPORTED_STACKS=(prometheus tempo)
+SUPPORTED_STACKS=(prometheus tempo loki)
 
 KUBE_PROMETHEUS_VERSION="${KUBE_PROMETHEUS_VERSION:-release-0.16}"
 
 # Preferring relative paths to have cleaner output.
 ROOT_DIR="$(_relativepath "${SCRIPT_DIR}/../..")"
+LOKI_EVAL_HACK_DIR="${ROOT_DIR}/hack/loki_multitenancy_openshift"
 KUBE_PROMETHEUS_DIR="${ROOT_DIR}/tmp/kube-prometheus"
 CONTAINER_CLI="${CONTAINER_CLI:-docker}"
 
@@ -287,6 +288,18 @@ phase_extras() {
             [[ $i -eq 20 ]] && fail "No traces found after 20 attempts"
         done
     fi
+
+    if has_stack loki; then
+        case ${PROFILE} in
+            openshift)
+                step "Installing Loki eval test stack (obs-mcp-loki)"
+                _run $KUBECTL apply -f "${LOKI_EVAL_HACK_DIR}/install/"
+                SKIP_MCP_CHECKS=1 "${LOKI_EVAL_HACK_DIR}/03_verify.sh"
+                ;;
+            *)
+                fail "loki stack requires --profile openshift (Loki Operator + LokiStack). For local tool smoke without a cluster, run: make run-loki-local-smoke" ;;
+        esac
+    fi
 }
 
 phase_upload() {
@@ -373,6 +386,7 @@ phase_deploy() {
     _toolsets_parts=(otelcol)
     has_stack prometheus && _toolsets_parts+=(metrics)
     has_stack tempo      && _toolsets_parts+=(traces)
+    has_stack loki       && _toolsets_parts+=(logs)
     _toolsets=$(IFS=,; echo "${_toolsets_parts[*]}")
 
     # Build a temporary kustomize overlay to inject runtime values (toolsets, image)

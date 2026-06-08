@@ -71,11 +71,20 @@ comma-separated list via `--stacks` (default: `prometheus,tempo`):
 |--------------|------------------|-----------------|
 | `prometheus` | kube-prometheus (k8s) or uses the built-in OpenShift monitoring stack | `metrics` |
 | `tempo`      | Tempo + OpenTelemetry operators and a sample tracing app | `traces` |
+| `loki`       | Loki Operator test stack (`obs-mcp-loki` in `obs-mcp-loki`) — **OpenShift profile only** | `logs` |
 
 The enabled stacks determine which `manifests/` subtrees are applied and which `--toolsets`
 value is passed to the obs-mcp deployment — no manual editing of manifests is needed.
 When deploying via `hack/e2e/setup.sh`, the `otelcol` toolset is always included (it has no
-external backend dependency); stack selection adds `metrics` and/or `traces` on top.
+external backend dependency); stack selection adds `metrics`, `traces`, and/or `logs` on top.
+
+Example with Loki eval fixture on OpenShift:
+
+```bash
+hack/e2e/setup.sh up --profile openshift --stacks prometheus,tempo,loki
+```
+
+For Loki tool smoke without OpenShift, use `make run-loki-local-smoke` (Docker Loki).
 
 **Phases** express what work to perform. The two top-level aliases cover the common cases:
 

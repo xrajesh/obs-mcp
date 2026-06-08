@@ -1,5 +1,7 @@
+# Default eval set: metrics + traces only. Loki tests live in evals-loki.yaml (opt-in fixture).
 - conversation_group_id: "pods-created"
   description: "Asks about basic kubernetes metrics in the cluster."
+  tag: "metrics"
 
   conversation_metrics: []
   conversation_metrics_metadata: {}
@@ -34,6 +36,7 @@
 
 - conversation_group_id: "pods-crashlooping"
   description: "Asks about basic kubernetes metrics in the cluster."
+  tag: "metrics"
 
   conversation_metrics: []
   conversation_metrics_metadata: {}
@@ -66,6 +69,7 @@
 
 - conversation_group_id: "pods-pending"
   description: "Asks about basic kubernetes metrics in the cluster."
+  tag: "metrics"
 
   conversation_metrics: []
   conversation_metrics_metadata: {}
@@ -96,6 +100,7 @@
 
 - conversation_group_id: "pods-cpu"
   description: "Asks about basic kubernetes metrics in the cluster."
+  tag: "metrics"
 
   conversation_metrics: []
   conversation_metrics_metadata: {}
@@ -126,6 +131,7 @@
 
 - conversation_group_id: "pods-networking"
   description: "Asks about basic kubernetes metrics in the cluster."
+  tag: "metrics"
 
   conversation_metrics: []
   conversation_metrics_metadata: {}
@@ -156,6 +162,7 @@
 
 - conversation_group_id: "prometheus-head-series"
   description: "Asks about basic prometheus metrics in the cluster."
+  tag: "metrics"
 
   conversation_metrics: []
   conversation_metrics_metadata: {}
@@ -186,6 +193,7 @@
 
 - conversation_group_id: "prometheus-requests"
   description: "Asks about basic prometheus metrics in the cluster."
+  tag: "metrics"
 
   conversation_metrics: []
   conversation_metrics_metadata: {}
@@ -216,6 +224,7 @@
 
 - conversation_group_id: "prometheus-wal"
   description: "Asks about basic prometheus metrics in the cluster."
+  tag: "metrics"
 
   conversation_metrics: []
   conversation_metrics_metadata: {}
@@ -246,6 +255,7 @@
 
 - conversation_group_id: "tempo-search-error-traces"
   description: "Search for traces with errors"
+  tag: "traces"
 
   conversation_metrics: []
   conversation_metrics_metadata: {}
@@ -273,6 +283,7 @@
         
 - conversation_group_id: "tempo-latency-investigation"
   description: "Find high latency traces for a specific service"
+  tag: "traces"
 
   conversation_metrics: []
   conversation_metrics_metadata: {}
@@ -292,55 +303,6 @@
               tempoNamespace: obs-mcp-tracing
               tempoName: tempo1
               query: '{ resource.service.name="shop-backend" && duration>500ms }'
-              server_label: obs
-      turn_metrics:
-        - "custom:tool_eval"
-
-- conversation_group_id: "loki-list-instances"
-  description: "Discover LokiStack instances"
-
-  conversation_metrics: []
-  conversation_metrics_metadata: {}
-
-  turns:
-    - turn_id: "turn-1"
-      query: "Which LokiStack instances are available in this cluster?"
-      expected_tool_calls:
-        - - tool_name: mcp_list_tools
-            arguments:
-              server_label: obs
-        - - tool_name: loki_list_instances
-            arguments:
-              server_label: obs
-      turn_metrics:
-        - "custom:tool_eval"
-
-- conversation_group_id: "loki-query-network-flows"
-  description: "Query NetObserv flow logs from Loki"
-
-  conversation_metrics: []
-  conversation_metrics_metadata: {}
-
-  turns:
-    - turn_id: "turn-1"
-      query: |
-        Query NetObserv network flow logs from the last hour where the source or
-        destination namespace is netobserv. Use LokiStack obs-mcp-loki in namespace
-        obs-mcp-loki with tenant network.
-      expected_tool_calls:
-        - - tool_name: mcp_list_tools
-            arguments:
-              server_label: obs
-        - - tool_name: loki_list_instances
-            arguments:
-              server_label: obs
-        - - tool_name: loki_query_range
-            arguments:
-              lokiNamespace: obs-mcp-loki
-              lokiName: obs-mcp-loki
-              tenant: network
-              query: '{SrcK8S_Namespace="netobserv"}'
-              duration: 1h
               server_label: obs
       turn_metrics:
         - "custom:tool_eval"

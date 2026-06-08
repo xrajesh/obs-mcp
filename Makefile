@@ -205,14 +205,17 @@ install-mcpchecker: $(TOOLS_BIN_DIR)/mcpchecker ## Install mcpchecker CLI for ru
 
 MCPCHECKER_EVAL_DIR := evals/mcpchecker
 RUNS ?= 1
+EVAL_CONFIG ?= eval.yaml
 
 .PHONY: run-mcpchecker-eval
-run-mcpchecker-eval: $(TOOLS_BIN_DIR)/mcpchecker ## Run mcpchecker eval (TASK=name, CATEGORY=queries, RUNS=3 for consistency testing)
+run-mcpchecker-eval: $(TOOLS_BIN_DIR)/mcpchecker ## Run mcpchecker eval (TASK=name, CATEGORY=..., EVAL_CONFIG=eval-logs.yaml, RUNS=3)
 ifdef TASK
-	cd $(MCPCHECKER_EVAL_DIR) && $(TOOLS_BIN_DIR)/mcpchecker check eval.yaml --run "$(TASK)" --runs $(RUNS) --verbose
+	cd $(MCPCHECKER_EVAL_DIR) && $(TOOLS_BIN_DIR)/mcpchecker check $(EVAL_CONFIG) --run "$(TASK)" --runs $(RUNS) --verbose
 else ifdef CATEGORY
-	cd $(MCPCHECKER_EVAL_DIR) && $(TOOLS_BIN_DIR)/mcpchecker check eval.yaml --label-selector "category=$(CATEGORY)" --runs $(RUNS) --parallel 4
+	cd $(MCPCHECKER_EVAL_DIR) && $(TOOLS_BIN_DIR)/mcpchecker check $(EVAL_CONFIG) --label-selector "category=$(CATEGORY)" --runs $(RUNS) --parallel 4
 else
-	cd $(MCPCHECKER_EVAL_DIR) && $(TOOLS_BIN_DIR)/mcpchecker check eval.yaml --runs $(RUNS) --parallel 4
+	cd $(MCPCHECKER_EVAL_DIR) && $(TOOLS_BIN_DIR)/mcpchecker check $(EVAL_CONFIG) --runs $(RUNS) --parallel 4
 endif
 
+include build/loki-evals.mk
+include build/loki-local.mk

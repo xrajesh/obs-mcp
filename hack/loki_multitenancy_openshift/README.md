@@ -45,13 +45,35 @@ Apply base resources first (project, OperatorGroup, MinIO, log generator). The v
 oc apply -f hack/loki_multitenancy_openshift/install/
 ```
 
+Or use the unified e2e setup (OpenShift only):
+
+```bash
+hack/e2e/setup.sh up --profile openshift --stacks loki
+# equivalent: make setup-loki-evals
+```
+
 If you previously ran `oc apply -f hack/loki_multitenancy_openshift/` and only `03_lokistack.yaml` failed, the install step above is already done — run verify below to create the stack.
 
 ## Verify discovery and queries
 
+With **obs-mcp running** on port 9100 (`make run-obs-mcp-server` from the repo root):
+
 ```bash
 hack/loki_multitenancy_openshift/03_verify.sh
+# or: make verify-loki-evals
 ```
+
+To deploy the stack **without** obs-mcp, then start the server and run evals:
+
+```bash
+make setup-loki-evals          # OpenShift only; waits for LokiStack Ready
+make run-obs-mcp-server        # background on :9100, logs toolset
+make verify-loki-evals         # MCP smoke test (no LLM)
+export OPENAI_API_KEY=sk-...
+make run-mcpchecker-eval CATEGORY=logs EVAL_CONFIG=eval-logs.yaml
+```
+
+See [`evals/mcpchecker/README.md`](../../evals/mcpchecker/README.md#loki-logs-evals-openshift) for the full Loki eval workflow.
 
 Environment overrides:
 

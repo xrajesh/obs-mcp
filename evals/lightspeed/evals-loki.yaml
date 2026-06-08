@@ -1,0 +1,59 @@
+# Loki tool evals — NOT included in the default evals.yaml run.
+#
+# Requires the reproducible OpenShift test fixture (LokiStack obs-mcp-loki):
+#   make setup-loki-evals
+#   # or: hack/e2e/setup.sh up --profile openshift --stacks loki
+#
+# obs-mcp must expose the logs toolset and reach the Loki gateway (--loki.use-route
+# or LOKI_URL). See evals/lightspeed/README.md.
+
+- conversation_group_id: "loki-list-instances"
+  description: "Discover LokiStack instances (requires obs-mcp-loki test fixture)"
+  tag: "loki-fixture"
+
+  conversation_metrics: []
+  conversation_metrics_metadata: {}
+
+  turns:
+    - turn_id: "turn-1"
+      query: "Which LokiStack instances are available in this cluster?"
+      expected_tool_calls:
+        - - tool_name: mcp_list_tools
+            arguments:
+              server_label: obs
+        - - tool_name: loki_list_instances
+            arguments:
+              server_label: obs
+      turn_metrics:
+        - "custom:tool_eval"
+
+- conversation_group_id: "loki-query-network-flows"
+  description: "Query NetObserv flow logs from Loki (requires LokiStack + NetObserv-shaped log data)"
+  tag: "loki-netobserv"
+
+  conversation_metrics: []
+  conversation_metrics_metadata: {}
+
+  turns:
+    - turn_id: "turn-1"
+      query: |
+        Query NetObserv network flow logs from the last hour where the source or
+        destination namespace is netobserv. Use LokiStack obs-mcp-loki in namespace
+        obs-mcp-loki with tenant network.
+      expected_tool_calls:
+        - - tool_name: mcp_list_tools
+            arguments:
+              server_label: obs
+        - - tool_name: loki_list_instances
+            arguments:
+              server_label: obs
+        - - tool_name: loki_query_range
+            arguments:
+              lokiNamespace: obs-mcp-loki
+              lokiName: obs-mcp-loki
+              tenant: network
+              query: '{SrcK8S_Namespace="netobserv"}'
+              duration: 1h
+              server_label: obs
+      turn_metrics:
+        - "custom:tool_eval"
