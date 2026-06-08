@@ -16,9 +16,9 @@ This starts Docker Loki, pushes a test log line, runs obs-mcp on `:9100` with `-
 
 ```bash
 make setup-loki-local          # docker run grafana/loki, push test log
-make run-obs-mcp-local         # obs-mcp with header auth + --loki-url
+make run-loki-mcp-local        # obs-mcp with header auth + --loki-url
 make verify-loki-local         # MCP smoke (no OPENAI_API_KEY)
-make stop-obs-mcp-server       # when done
+make stop-loki-mcp-server      # when done
 make stop-loki-local
 ```
 

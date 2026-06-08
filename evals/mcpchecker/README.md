@@ -7,7 +7,7 @@ Evaluations for obs-mcp using [mcpchecker](https://github.com/mcpchecker/mcpchec
 - [mcpchecker](https://github.com/mcpchecker/mcpchecker#install) installed (v0.0.16+) — run `make install-mcpchecker` from the repo root
 - **Metrics / alerts / traces / otelcol:** Kubernetes or OpenShift cluster with Prometheus and Alertmanager (see [Backend Setup](#backend-setup))
 - **Loki (`category=logs`):** OpenShift cluster with the test LokiStack from [`hack/loki_multitenancy_openshift/`](../../hack/loki_multitenancy_openshift/) — see [Loki evals](#loki-logs-evals-openshift). Provision with `hack/e2e/setup.sh --stacks loki` or `make setup-loki-evals`. For a **local smoke test** without OpenShift or an API key, use `make run-loki-local-smoke` ([docs](#loki-logs-local-smoke-docker))
-- **obs-mcp** running at `http://localhost:9100/mcp` before any mcpchecker run (`make run-obs-mcp-server` for Loki evals)
+- **obs-mcp** running at `http://localhost:9100/mcp` before any mcpchecker run (`make run-loki-mcp-server` for Loki evals)
 
 ## Environment Variables
 
@@ -215,7 +215,7 @@ To exercise `loki_label_names` and `loki_query_range` without a cluster or `OPEN
 make run-loki-local-smoke
 ```
 
-Or step by step: `make setup-loki-local`, `make run-obs-mcp-local`, `make verify-loki-local`.
+Or step by step: `make setup-loki-local`, `make run-loki-mcp-local`, `make verify-loki-local`.
 
 This uses [plain Loki in Docker](../../hack/loki_local/README.md) and `--loki-url`. It does **not** run mcpchecker agent evals or `loki_list_instances` (those need LokiStack CRs on OpenShift).
 
@@ -255,7 +255,7 @@ make setup-loki-evals
 **2. Start obs-mcp** with the `logs` toolset (keep running, or use background target):
 
 ```bash
-make run-obs-mcp-server LOKI_EVAL_TOOLSETS=logs
+make run-loki-mcp-server LOKI_MCP_TOOLSETS=logs
 # foreground alternative:
 # make run TOOLSETS=logs LISTEN_ADDR=127.0.0.1:9100
 ```
@@ -264,7 +264,7 @@ If the LokiStack has no OpenShift Route, port-forward the gateway and disable ro
 
 ```bash
 oc port-forward -n obs-mcp-loki svc/obs-mcp-loki-gateway-http 8080:8080 &
-make run-obs-mcp-server LOKI_USE_ROUTE=false LOKI_URL=http://127.0.0.1:8080
+make run-loki-mcp-server LOKI_USE_ROUTE=false LOKI_URL=http://127.0.0.1:8080
 ```
 
 **3. Verify connectivity** (no LLM tokens — exercises the same MCP tools as the eval tasks):
@@ -310,8 +310,8 @@ Set `NETOBSERV_NS` when verifying if your flows live outside `netobserv` (see `0
 
 | Symptom | Fix |
 |---------|-----|
-| `connection refused` on `:9100` | Start obs-mcp: `make run-obs-mcp-server` |
-| `loki_list_instances` empty / tool missing | Use `TOOLSETS=logs` (or `make run-obs-mcp-server`) |
+| `connection refused` on `:9100` | Start obs-mcp: `make run-loki-mcp-server` |
+| `loki_list_instances` empty / tool missing | Use `TOOLSETS=logs` (or `make run-loki-mcp-server`) |
 | Judge fails on `SrcK8S_Namespace` | Need NetObserv flow logs or adjust task prompts for your data |
 | `403` / empty Loki streams | Apply gateway RBAC above; check `oc auth can-i list pods -n netobserv` |
 

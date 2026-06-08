@@ -116,6 +116,6 @@ make run-mcpchecker-eval TASK=cpu-usage             # single task, verbose
 make run-mcpchecker-eval RUNS=3                     # multiple runs for consistency testing
 ```
 
-Loki **agent evals** need OpenShift + `make setup-loki-evals` + `make run-obs-mcp-server` — see [`evals/mcpchecker/README.md`](evals/mcpchecker/README.md#loki-logs-evals-openshift).
+Loki **agent evals** need OpenShift + `make setup-loki-evals` + `make run-loki-mcp-server` — see [`evals/mcpchecker/README.md`](evals/mcpchecker/README.md#loki-logs-evals-openshift).
 
 For a **local smoke test** without OpenShift or an API key: `make run-loki-local-smoke` (Docker Loki + MCP tool verify).

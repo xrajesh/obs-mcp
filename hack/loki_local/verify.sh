@@ -29,7 +29,7 @@ mcp_call_raw() {
     -H "Accept: application/json, text/event-stream" \
     -d "${payload}")"; then
     echo "ERROR: MCP request to ${MCP_URL} failed" >&2
-    echo "Start obs-mcp first: make run-obs-mcp-local" >&2
+    echo "Start obs-mcp first: make run-loki-mcp-local" >&2
     exit 1
   fi
   result="$(mcp_parse_sse "${raw}")"

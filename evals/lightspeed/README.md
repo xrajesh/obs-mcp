@@ -66,7 +66,7 @@ hack/e2e/setup.sh up --profile openshift --stacks prometheus,tempo
 hack/e2e/setup.sh up --profile openshift --stacks prometheus,tempo,loki
 ```
 
-Equivalent Make targets for Loki-only fixture work: `make setup-loki-evals`, `make run-obs-mcp-server LOKI_EVAL_TOOLSETS=logs`.
+Equivalent Make targets for Loki-only fixture work: `make setup-loki-evals`, `make run-loki-mcp-server LOKI_MCP_TOOLSETS=logs`.
 
 ### Run the evaluations (default — no Loki)
 

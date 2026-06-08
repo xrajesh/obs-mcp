@@ -56,7 +56,7 @@ If you previously ran `oc apply -f hack/loki_multitenancy_openshift/` and only `
 
 ## Verify discovery and queries
 
-With **obs-mcp running** on port 9100 (`make run-obs-mcp-server` from the repo root):
+With **obs-mcp running** on port 9100 (`make run-loki-mcp-server` from the repo root):
 
 ```bash
 hack/loki_multitenancy_openshift/03_verify.sh
@@ -67,7 +67,7 @@ To deploy the stack **without** obs-mcp, then start the server and run evals:
 
 ```bash
 make setup-loki-evals          # OpenShift only; waits for LokiStack Ready
-make run-obs-mcp-server        # background on :9100, logs toolset
+make run-loki-mcp-server       # background on :9100, logs toolset
 make verify-loki-evals         # MCP smoke test (no LLM)
 export OPENAI_API_KEY=sk-...
 make run-mcpchecker-eval CATEGORY=logs EVAL_CONFIG=eval-logs.yaml
