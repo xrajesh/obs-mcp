@@ -68,7 +68,7 @@ KUBE_PROMETHEUS_VERSION="${KUBE_PROMETHEUS_VERSION:-release-0.16}"
 
 # Preferring relative paths to have cleaner output.
 ROOT_DIR="$(_relativepath "${SCRIPT_DIR}/../..")"
-LOKI_EVAL_HACK_DIR="${ROOT_DIR}/hack/loki_multitenancy_openshift"
+
 KUBE_PROMETHEUS_DIR="${ROOT_DIR}/tmp/kube-prometheus"
 CONTAINER_CLI="${CONTAINER_CLI:-docker}"
 
@@ -154,6 +154,27 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Loki helper functions
+# ---------------------------------------------------------------------------
+
+# Detect the cluster's default StorageClass.
+_detect_storage_class() {
+    local _sc="${LOKI_STORAGE_CLASS:-}"
+    if [[ -n "${_sc}" ]]; then
+        echo "${_sc}"
+        return
+    fi
+    _sc="$($KUBECTL get storageclass -o json | jq -r '.items[] | select(.metadata.annotations["storageclass.kubernetes.io/is-default-class"] == "true" or .metadata.annotations["storageclass.beta.kubernetes.io/is-default-class"] == "true") | .metadata.name' | head -n1)"
+    if [[ -z "${_sc}" ]]; then
+        echo "Unable to detect a default StorageClass. Set LOKI_STORAGE_CLASS explicitly and retry." >&2
+        echo "Available StorageClasses:" >&2
+        $KUBECTL get storageclass >&2
+        return 1
+    fi
+    echo "${_sc}"
+}
+
+# ---------------------------------------------------------------------------
 # Phase implementations
 # ---------------------------------------------------------------------------
 
@@ -208,6 +229,21 @@ phase_prereqs() {
                 _wait_rollout monitoring deployment/prometheus-operator 5m
                 _wait_rollout monitoring statefulset/prometheus-k8s 5m
                 _wait_rollout monitoring statefulset/alertmanager-main 5m
+        esac
+    fi
+
+    if has_stack loki; then
+        case ${PROFILE} in
+            openshift)
+                step "Installing Loki operator"
+                _run $KUBECTL apply -k "${ROOT_DIR}/manifests/loki/prereqs/openshift/"
+                _wait_rollout openshift-loki-operator deployment/loki-operator-controller-manager 10m
+
+                step "Waiting for LokiStack CRD"
+                _run $KUBECTL wait --for=condition=Established crd/lokistacks.loki.grafana.com --timeout=15m
+            ;;
+            *)
+                fail "loki stack requires --profile openshift" ;;
         esac
     fi
 
@@ -292,9 +328,43 @@ phase_extras() {
     if has_stack loki; then
         case ${PROFILE} in
             openshift)
-                step "Installing Loki eval test stack (obs-mcp-loki)"
-                _run $KUBECTL apply -f "${LOKI_EVAL_HACK_DIR}/install/"
-                SKIP_MCP_CHECKS=1 "${LOKI_EVAL_HACK_DIR}/03_verify.sh"
+                step "Deploying Loki test stack (obs-mcp-loki)"
+
+                # Detect the cluster's default StorageClass
+                _loki_sc=$(_detect_storage_class)
+                info "Using StorageClass: ${_loki_sc}"
+
+                # Build a temporary overlay that patches storageClassName into
+                # the LokiStack CR.
+                _overlay="${ROOT_DIR}/manifests/loki/extras/overlay"
+                mkdir -p "${_overlay}"
+                cat > "${_overlay}/kustomization.yaml" <<EOF
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../openshift
+patches:
+  - patch: |
+      apiVersion: loki.grafana.com/v1
+      kind: LokiStack
+      metadata:
+        name: obs-mcp-loki
+        namespace: obs-mcp-loki
+      spec:
+        storageClassName: "${_loki_sc}"
+EOF
+                _run $KUBECTL apply -k "${_overlay}"
+
+                # Wait for dependencies
+                step "Waiting for MinIO"
+                _wait_rollout obs-mcp-loki deployment/minio 5m
+
+                step "Waiting for LokiStack Ready"
+                _run $KUBECTL wait --for=jsonpath='{.status.conditions[?(@.type=="Ready")].status}'=True \
+                    lokistack/obs-mcp-loki -n obs-mcp-loki --timeout=10m
+
+                step "Waiting for log generator"
+                _wait_rollout obs-mcp-loki deployment/obs-mcp-log-generator 2m
                 ;;
             *)
                 fail "loki stack requires --profile openshift (Loki Operator + LokiStack). For local tool smoke without a cluster, run: make run-loki-local-smoke" ;;
@@ -442,6 +512,11 @@ EOF
     # Tempo tracing RBAC
     if has_stack tempo; then
         _run $KUBECTL apply -f "${ROOT_DIR}/manifests/tempo/deploy/"
+    fi
+
+    # Loki discovery RBAC
+    if has_stack loki; then
+        _run $KUBECTL apply -f "${ROOT_DIR}/manifests/loki/deploy/"
     fi
 
     step "Waiting for obs-mcp rollout"
