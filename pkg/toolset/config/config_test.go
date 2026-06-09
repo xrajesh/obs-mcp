@@ -6,6 +6,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 
+	"github.com/rhobs/obs-mcp/pkg/auth"
 	"github.com/rhobs/obs-mcp/pkg/prometheus"
 )
 
@@ -97,22 +98,22 @@ func TestGetAuthMode(t *testing.T) {
 	tests := []struct {
 		name string
 		toml string
-		want AuthMode
+		want auth.AuthMode
 	}{
 		{
 			name: "empty auth_mode defaults to header",
 			toml: ``,
-			want: AuthModeHeader,
+			want: auth.AuthModeHeader,
 		},
 		{
 			name: "auth_mode header returns header",
 			toml: `auth_mode = "header"`,
-			want: AuthModeHeader,
+			want: auth.AuthModeHeader,
 		},
 		{
 			name: "auth_mode kubeconfig returns kubeconfig",
 			toml: `auth_mode = "kubeconfig"`,
-			want: AuthModeKubeConfig,
+			want: auth.AuthModeKubeConfig,
 		},
 	}
 

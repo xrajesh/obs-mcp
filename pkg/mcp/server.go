@@ -15,6 +15,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"k8s.io/client-go/dynamic"
 
+	"github.com/rhobs/obs-mcp/pkg/auth"
 	"github.com/rhobs/obs-mcp/pkg/k8s"
 	"github.com/rhobs/obs-mcp/pkg/otelcol"
 	"github.com/rhobs/obs-mcp/pkg/prometheus"
@@ -36,7 +37,7 @@ var AllToolsets = []string{string(ToolsetMetrics), string(ToolsetTraces), string
 // ObsMCPOptions contains configuration options for the MCP server
 type ObsMCPOptions struct {
 	Toolsets               []Toolset
-	AuthMode               AuthMode
+	AuthMode               auth.AuthMode
 	MetricsBackendURL      string
 	AlertmanagerURL        string
 	Insecure               bool
@@ -134,13 +135,12 @@ func SetupTools(mcpServer *mcp.Server, opts ObsMCPOptions) error {
 	return nil
 }
 
-func authFromRequest(ctx context.Context, r *http.Request) context.Context {
-	authHeaderValue := r.Header.Get(string(AuthHeaderKey))
-	token, found := strings.CutPrefix(authHeaderValue, "Bearer ")
-	if !found {
-		return ctx
-	}
-	return context.WithValue(ctx, AuthHeaderKey, token)
+func authMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := auth.ContextWithAuthFromRequest(r.Context(), r)
+		r = r.WithContext(ctx)
+		next.ServeHTTP(w, r)
+	})
 }
 
 func loggingMiddleware(next http.Handler) http.Handler {
@@ -154,12 +154,17 @@ func loggingMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func Serve(ctx context.Context, mcpServer *mcp.Server, listenAddr string) error {
+func Serve(ctx context.Context, mcpServer *mcp.Server, listenAddr string, authMode auth.AuthMode) error {
 	mux := http.NewServeMux()
+
+	handler := loggingMiddleware(mux)
+	if authMode == auth.AuthModeHeader {
+		handler = authMiddleware(handler)
+	}
 
 	httpServer := &http.Server{
 		Addr:    listenAddr,
-		Handler: loggingMiddleware(mux),
+		Handler: handler,
 	}
 
 	opts := &mcp.StreamableHTTPOptions{

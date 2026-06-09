@@ -13,11 +13,11 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/prometheus/common/promslog"
 
+	"github.com/rhobs/obs-mcp/pkg/auth"
 	"github.com/rhobs/obs-mcp/pkg/k8s"
 	mcpserver "github.com/rhobs/obs-mcp/pkg/mcp"
 	"github.com/rhobs/obs-mcp/pkg/otelcol"
 	"github.com/rhobs/obs-mcp/pkg/prometheus"
-	"github.com/rhobs/obs-mcp/pkg/toolset/config"
 	"github.com/rhobs/obs-mcp/pkg/traces"
 )
 
@@ -66,7 +66,7 @@ func main() {
 	configureLogging(*logLevel)
 
 	// Parse and validate auth mode
-	parsedAuthMode, err := mcpserver.ParseAuthMode(*authMode)
+	parsedAuthMode, err := auth.ParseAuthMode(*authMode)
 	if err != nil {
 		log.Fatalf("Invalid auth mode: %v", err)
 	}
@@ -79,7 +79,7 @@ func main() {
 
 	// --metrics-backend only controls route discovery in kubeconfig mode.
 	// Fail fast if it's set in any other mode to avoid silent misconfiguration.
-	if parsedAuthMode != mcpserver.AuthModeKubeConfig && isFlagExplicitlySet("metrics-backend") {
+	if parsedAuthMode != auth.AuthModeKubeConfig && isFlagExplicitlySet("metrics-backend") {
 		log.Fatalf("--metrics-backend has no effect with --auth-mode %s; "+
 			"set PROMETHEUS_URL to point at your Thanos/Prometheus instance instead", parsedAuthMode)
 	}
@@ -140,7 +140,7 @@ func main() {
 		Guardrails:             parsedGuardrails,
 		FullRangeQueryResponse: *fullRangeQueryResponse,
 		Traces: &traces.Config{
-			AuthMode: config.AuthMode(parsedAuthMode),
+			AuthMode: parsedAuthMode,
 			Insecure: *insecure,
 			UseRoute: *tracesUseRoute,
 		},
@@ -167,7 +167,7 @@ func main() {
 	if *listen != "" {
 		// HTTP mode
 		ctx := context.Background()
-		if err := mcpserver.Serve(ctx, mcpServer, *listen); err != nil {
+		if err := mcpserver.Serve(ctx, mcpServer, *listen, opts.AuthMode); err != nil {
 			log.Fatalf("HTTP server failed: %v", err)
 		}
 	} else {
@@ -206,12 +206,12 @@ func parseMetricsBackend(backend string) (k8s.MetricsBackend, error) {
 
 // determineMetricsBackendURL determines the metrics backend URL based on auth mode and environment.
 // Returns the resolved URL, a source description for logging, and an error if the configuration is invalid.
-func determineMetricsBackendURL(authMode mcpserver.AuthMode, backend k8s.MetricsBackend) (url, source string, err error) {
+func determineMetricsBackendURL(authMode auth.AuthMode, backend k8s.MetricsBackend) (url, source string, err error) {
 	if prometheusURL := os.Getenv("PROMETHEUS_URL"); prometheusURL != "" {
 		return prometheusURL, "PROMETHEUS_URL env var", nil
 	}
 
-	if authMode == mcpserver.AuthModeKubeConfig {
+	if authMode == auth.AuthModeKubeConfig {
 		slog.Info("No PROMETHEUS_URL set, attempting route discovery", "backend", backend)
 		url, err := k8s.GetMetricsBackendURL(backend)
 		if err != nil {
@@ -232,12 +232,12 @@ func determineMetricsBackendURL(authMode mcpserver.AuthMode, backend k8s.Metrics
 
 // determineAlertmanagerURL determines the Alertmanager URL based on auth mode and environment.
 // Returns the resolved URL, a source description for logging, and an error if the configuration is invalid.
-func determineAlertmanagerURL(authMode mcpserver.AuthMode) (url, source string, err error) {
+func determineAlertmanagerURL(authMode auth.AuthMode) (url, source string, err error) {
 	if alertmanagerURL := os.Getenv("ALERTMANAGER_URL"); alertmanagerURL != "" {
 		return alertmanagerURL, "ALERTMANAGER_URL env var", nil
 	}
 
-	if authMode == mcpserver.AuthModeKubeConfig {
+	if authMode == auth.AuthModeKubeConfig {
 		slog.Info("No ALERTMANAGER_URL set, attempting route discovery")
 		url, err := k8s.GetAlertmanagerURL()
 		if err != nil {
