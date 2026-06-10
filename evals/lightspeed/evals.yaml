@@ -1,7 +1,5 @@
-# Default eval set: metrics + traces only. Loki tests live in evals-loki.yaml (opt-in fixture).
 - conversation_group_id: "pods-created"
   description: "Asks about basic kubernetes metrics in the cluster."
-  tag: "metrics"
 
   conversation_metrics: []
   conversation_metrics_metadata: {}
@@ -36,7 +34,6 @@
 
 - conversation_group_id: "pods-crashlooping"
   description: "Asks about basic kubernetes metrics in the cluster."
-  tag: "metrics"
 
   conversation_metrics: []
   conversation_metrics_metadata: {}
@@ -69,7 +66,6 @@
 
 - conversation_group_id: "pods-pending"
   description: "Asks about basic kubernetes metrics in the cluster."
-  tag: "metrics"
 
   conversation_metrics: []
   conversation_metrics_metadata: {}
@@ -100,7 +96,6 @@
 
 - conversation_group_id: "pods-cpu"
   description: "Asks about basic kubernetes metrics in the cluster."
-  tag: "metrics"
 
   conversation_metrics: []
   conversation_metrics_metadata: {}
@@ -131,7 +126,6 @@
 
 - conversation_group_id: "pods-networking"
   description: "Asks about basic kubernetes metrics in the cluster."
-  tag: "metrics"
 
   conversation_metrics: []
   conversation_metrics_metadata: {}
@@ -162,7 +156,6 @@
 
 - conversation_group_id: "prometheus-head-series"
   description: "Asks about basic prometheus metrics in the cluster."
-  tag: "metrics"
 
   conversation_metrics: []
   conversation_metrics_metadata: {}
@@ -193,7 +186,6 @@
 
 - conversation_group_id: "prometheus-requests"
   description: "Asks about basic prometheus metrics in the cluster."
-  tag: "metrics"
 
   conversation_metrics: []
   conversation_metrics_metadata: {}
@@ -224,7 +216,6 @@
 
 - conversation_group_id: "prometheus-wal"
   description: "Asks about basic prometheus metrics in the cluster."
-  tag: "metrics"
 
   conversation_metrics: []
   conversation_metrics_metadata: {}
@@ -255,7 +246,6 @@
 
 - conversation_group_id: "tempo-search-error-traces"
   description: "Search for traces with errors"
-  tag: "traces"
 
   conversation_metrics: []
   conversation_metrics_metadata: {}
@@ -283,7 +273,6 @@
         
 - conversation_group_id: "tempo-latency-investigation"
   description: "Find high latency traces for a specific service"
-  tag: "traces"
 
   conversation_metrics: []
   conversation_metrics_metadata: {}
@@ -307,6 +296,7 @@
       turn_metrics:
         - "custom:tool_eval"
 
+        
 # TODO: Add this eval once we have the nodes-cpu-usage-query rule in a Prometheus.
 # - conversation_group_id: "nodes-cpu-usage-query"
 #   description: "Asks about basic metrics in the cluster."
