@@ -232,6 +232,16 @@ phase_prereqs() {
         esac
     fi
 
+    if (has_stack tempo || has_stack loki) && [ "${PROFILE}" != "openshift" ]; then
+        if ! $KUBECTL get crd certificates.cert-manager.io &>/dev/null; then
+            step "Installing Cert Manager"
+            _run $KUBECTL apply -f https://github.com/jetstack/cert-manager/releases/download/v1.19.4/cert-manager.yaml
+            _wait_rollout cert-manager deployment/cert-manager 5m
+            _wait_rollout cert-manager deployment/cert-manager-cainjector 5m
+            _wait_rollout cert-manager deployment/cert-manager-webhook 5m
+        fi
+    fi
+
     if has_stack loki; then
         case ${PROFILE} in
             openshift)
@@ -242,8 +252,14 @@ phase_prereqs() {
                 step "Waiting for LokiStack CRD"
                 _run $KUBECTL wait --for=condition=Established crd/lokistacks.loki.grafana.com --timeout=15m
             ;;
-            *)
-                fail "loki stack requires --profile openshift" ;;
+            kind|k8s)
+                step "Installing Loki operator"
+                _run $KUBECTL apply --server-side -k "${ROOT_DIR}/manifests/loki/prereqs/kubernetes/"
+                _wait_rollout loki-operator deployment/loki-operator-controller-manager 5m
+
+                step "Waiting for LokiStack CRD"
+                _run $KUBECTL wait --for=condition=Established crd/lokistacks.loki.grafana.com --timeout=5m
+            ;;
         esac
     fi
 
@@ -258,12 +274,6 @@ phase_prereqs() {
                 _wait_rollout openshift-tempo-operator deployment/tempo-operator-controller 10m
             ;;
             *)
-                step "Installing Cert Manager"
-                _run $KUBECTL apply -f https://github.com/jetstack/cert-manager/releases/download/v1.19.4/cert-manager.yaml
-                _wait_rollout cert-manager deployment/cert-manager 5m
-                _wait_rollout cert-manager deployment/cert-manager-cainjector 5m
-                _wait_rollout cert-manager deployment/cert-manager-webhook 5m
-
                 step "Installing OpenTelemetry operator"
                 _run $KUBECTL apply -f https://github.com/open-telemetry/opentelemetry-operator/releases/download/v0.146.0/opentelemetry-operator.yaml
                 _wait_rollout opentelemetry-operator-system deployment/opentelemetry-operator-controller-manager 5m
@@ -327,22 +337,25 @@ phase_extras() {
 
     if has_stack loki; then
         case ${PROFILE} in
-            openshift)
-                step "Deploying Loki test stack (obs-mcp-loki)"
+            openshift) _loki_extras_base="../openshift" ;;
+            *)         _loki_extras_base="../kubernetes" ;;
+        esac
 
-                # Detect the cluster's default StorageClass
-                _loki_sc=$(_detect_storage_class)
-                info "Using StorageClass: ${_loki_sc}"
+        step "Deploying Loki test stack (obs-mcp-loki)"
 
-                # Build a temporary overlay that patches storageClassName into
-                # the LokiStack CR.
-                _overlay="${ROOT_DIR}/manifests/loki/extras/overlay"
-                mkdir -p "${_overlay}"
-                cat > "${_overlay}/kustomization.yaml" <<EOF
+        # Detect the cluster's default StorageClass
+        _loki_sc=$(_detect_storage_class)
+        info "Using StorageClass: ${_loki_sc}"
+
+        # Build a temporary overlay that patches storageClassName into
+        # the LokiStack CR.
+        _overlay="${ROOT_DIR}/manifests/loki/extras/overlay"
+        mkdir -p "${_overlay}"
+        cat > "${_overlay}/kustomization.yaml" <<EOF
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../openshift
+  - ${_loki_extras_base}
 patches:
   - patch: |
       apiVersion: loki.grafana.com/v1
@@ -353,22 +366,18 @@ patches:
       spec:
         storageClassName: "${_loki_sc}"
 EOF
-                _run $KUBECTL apply -k "${_overlay}"
+        _run $KUBECTL apply -k "${_overlay}"
 
-                # Wait for dependencies
-                step "Waiting for MinIO"
-                _wait_rollout obs-mcp-loki deployment/minio 5m
+        # Wait for dependencies
+        step "Waiting for MinIO"
+        _wait_rollout obs-mcp-loki deployment/minio 5m
 
-                step "Waiting for LokiStack Ready"
-                _run $KUBECTL wait --for=jsonpath='{.status.conditions[?(@.type=="Ready")].status}'=True \
-                    lokistack/obs-mcp-loki -n obs-mcp-loki --timeout=10m
+        step "Waiting for LokiStack Ready"
+        _run $KUBECTL wait --for=jsonpath='{.status.conditions[?(@.type=="Ready")].status}'=True \
+            lokistack/obs-mcp-loki -n obs-mcp-loki --timeout=10m
 
-                step "Waiting for log generator"
-                _wait_rollout obs-mcp-loki deployment/obs-mcp-log-generator 2m
-                ;;
-            *)
-                fail "loki stack requires --profile openshift (Loki Operator + LokiStack). For local tool smoke without a cluster, run: make run-loki-local-smoke" ;;
-        esac
+        step "Waiting for log generator"
+        _wait_rollout obs-mcp-loki deployment/obs-mcp-log-generator 2m
     fi
 }
 
