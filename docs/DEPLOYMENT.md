@@ -44,10 +44,11 @@ Example manifests are provided in the `manifests/` directory, organised by stack
 - `manifests/prometheus/deploy/kubernetes/` — NetworkPolicies for kube-prometheus access
 - `manifests/prometheus/deploy/openshift/` — RBAC for OpenShift monitoring access
 - `manifests/tempo/deploy/` — Tracing RBAC (platform-independent)
+- `manifests/loki/deploy/` — Loki RBAC (platform-independent)
 
 These are **reference examples** that you'll need to customize for your environment.
 
-### Using a helper script
+### Using setup.sh
 
 `hack/e2e/setup.sh` automates cluster setup for E2E testing and development. It accepts a
 **profile**, a set of **stacks**, and a **phase expression**:
@@ -77,14 +78,6 @@ The enabled stacks determine which `manifests/` subtrees are applied and which `
 value is passed to the obs-mcp deployment — no manual editing of manifests is needed.
 When deploying via `hack/e2e/setup.sh`, the `otelcol` toolset is always included (it has no
 external backend dependency); stack selection adds `metrics`, `traces`, and/or `logs` on top.
-
-Example with Loki eval fixture on OpenShift:
-
-```bash
-hack/e2e/setup.sh up --profile openshift --stacks prometheus,tempo,loki
-```
-
-For Loki tool smoke without OpenShift, use `make run-loki-local-smoke` (Docker Loki).
 
 **Phases** express what work to perform. The two top-level aliases cover the common cases:
 
