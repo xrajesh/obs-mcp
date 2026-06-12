@@ -16,5 +16,5 @@ spec:
       Which LokiStack instances are available in this cluster?
   verify:
     - llmJudge:
-        contains: "loki"
+        contains: "obs-mcp-loki"
         reason: "Verify the agent reported LokiStack instance details"
