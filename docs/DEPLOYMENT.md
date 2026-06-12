@@ -2,6 +2,29 @@
 
 This guide covers authentication modes and deploying obs-mcp on Kubernetes/OpenShift clusters.
 
+## Quickstart Developer Setup
+
+The best easiest way to get everything up and running for development is to leverage the e2e setup
+scripts:
+
+```bash
+# for local kind-based deployment
+export E2E_PROFILE=kind
+# or when running against openshift cluster
+# export E2E_PROFILE=openshift
+make test-e2e-setup && make test-e2e-deploy && make test-e2e
+```
+
+This setup configures all dependencies, as well as the obs-mcp deployment itself.
+
+To use the remote deployment locally, you can port-forward the MCP service with
+
+```
+make test-e2e-pf
+```
+
+These make targets leverage the `setup.sh` script. See [using setup.sh](#using-setup.sh) below for more details.
+
 ## Authentication Modes
 
 The `--auth-mode` flag controls how obs-mcp obtains bearer tokens for **Prometheus/Thanos**, **Alertmanager**, and (when enabled) **Loki** and **Tempo** endpoints:
