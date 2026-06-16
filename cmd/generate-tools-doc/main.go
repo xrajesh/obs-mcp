@@ -13,18 +13,27 @@ import (
 )
 
 func main() {
-	tools := mcp.AllTools()
+	groups := mcp.GroupedTools()
 
-	if err := generateMarkdown(tools, "TOOLS.md"); err != nil {
+	if err := generateMarkdown(groups, "TOOLS.md"); err != nil {
 		fmt.Fprintf(os.Stderr, "Error generating TOOLS.md: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Println("✓ TOOLS.md generated successfully")
-	fmt.Printf("  Documented %d tools:\n", len(tools))
-	for i := range tools {
-		fmt.Printf("    - %s\n", tools[i].Name)
+
+	total := 0
+	for _, g := range groups {
+		total += len(g.Tools)
 	}
-	fmt.Println("\n💡 Reminder: When adding a new tool, register it in the relevant package AllTools() list (metrics, logs, traces); pkg/mcp/tools.go AllTools() merges them.")
+
+	fmt.Println("✓ TOOLS.md generated successfully")
+	fmt.Printf("  Documented %d tools in %d categories:\n", total, len(groups))
+	for _, g := range groups {
+		fmt.Printf("    %s %s (%d tools)\n", g.Icon, g.Name, len(g.Tools))
+		for i := range g.Tools {
+			fmt.Printf("      - %s\n", g.Tools[i].Name)
+		}
+	}
+	fmt.Println("\n💡 Reminder: When adding a new tool, register it in the relevant package AllTools() list (metrics, logs, traces); pkg/mcp/tools.go GroupedTools() merges them.")
 }
 
 type fieldInfo struct {
@@ -76,7 +85,6 @@ func (p *Property) getTypeString() string {
 	case string:
 		return t
 	case []any:
-		// Handle nullable types like ["null", "string"]
 		for _, typ := range t {
 			if typeStr, ok := typ.(string); ok && typeStr != "null" {
 				return typeStr
@@ -94,7 +102,6 @@ func (p *Property) getDisplayType() string {
 		if itemType != "" {
 			return itemType + "[]"
 		}
-		// For object arrays, just return "object[]"
 		return "object[]"
 	}
 	if baseType == "" {
@@ -147,7 +154,7 @@ func extractParams(tool *mcplib.Tool) []fieldInfo {
 	if err != nil {
 		return nil
 	}
-	return extractFieldsFromSchema(schema, true) // sort by required
+	return extractFieldsFromSchema(schema, true)
 }
 
 func extractOutputSchema(tool *mcplib.Tool) []fieldInfo {
@@ -155,11 +162,10 @@ func extractOutputSchema(tool *mcplib.Tool) []fieldInfo {
 	if err != nil {
 		return nil
 	}
-	return extractFieldsFromSchema(schema, false) // sort by name only
+	return extractFieldsFromSchema(schema, false)
 }
 
-// sanitizeTableCell makes cell content safe for a single-line GFM table row:
-// newlines would otherwise break the table; pipe characters would split columns.
+// sanitizeTableCell makes cell content safe for a single-line GFM table row.
 func sanitizeTableCell(s string) string {
 	s = strings.TrimSpace(s)
 	s = strings.ReplaceAll(s, "\r\n", "\n")
@@ -169,9 +175,7 @@ func sanitizeTableCell(s string) string {
 	return s
 }
 
-// formatTable writes a compact GFM markdown table (no fixed-width padding).
-// Padding every cell to the widest description made each row as long as the
-// longest row in the file and hurt readability and diffs.
+// formatTable writes a compact GFM markdown table.
 func formatTable(headers, alignments []string, rows [][]string) string {
 	if len(headers) == 0 || len(rows) == 0 {
 		return ""
@@ -231,107 +235,182 @@ func formatTable(headers, alignments []string, rows [][]string) string {
 	return sb.String()
 }
 
-func generateMarkdown(tools []mcplib.Tool, filename string) error {
+// toolAnchor returns the GitHub-compatible markdown anchor for a tool name.
+func toolAnchor(name string) string {
+	return name
+}
+
+// categoryAnchor returns the GitHub-compatible markdown anchor for a category name.
+func categoryAnchor(name string) string {
+	anchor := strings.ToLower(name)
+	anchor = strings.ReplaceAll(anchor, " ", "-")
+	anchor = strings.ReplaceAll(anchor, "/", "")
+	anchor = strings.ReplaceAll(anchor, "(", "")
+	anchor = strings.ReplaceAll(anchor, ")", "")
+	anchor = strings.ReplaceAll(anchor, "--", "-")
+	return strings.Trim(anchor, "-")
+}
+
+// firstSentence extracts the first sentence (up to the first period followed by space or end).
+func firstSentence(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.ReplaceAll(s, "\n", " ")
+	if idx := strings.Index(s, ". "); idx != -1 {
+		return s[:idx+1]
+	}
+	if strings.HasSuffix(s, ".") {
+		return s
+	}
+	return s
+}
+
+func generateMarkdown(groups []mcp.ToolGroup, filename string) error {
 	var sb strings.Builder
 
 	sb.WriteString("<!-- This file is auto-generated. Do not edit manually. -->\n")
 	sb.WriteString("<!-- Run 'make generate-tools-doc' to regenerate. -->\n\n")
 
 	sb.WriteString("# Available Tools\n\n")
-	sb.WriteString("This MCP server exposes the following tools for Prometheus/Thanos, Alertmanager, Loki, Tempo, and OpenTelemetry Collector configuration:\n\n")
+	sb.WriteString("This MCP server exposes the following tools for Prometheus/Thanos, Alertmanager, Loki, Tempo, and OpenTelemetry Collector configuration.\n\n")
+
+	// --- Quick-reference table ---
+	sb.WriteString("## Quick Reference\n\n")
+	sb.WriteString("| Tool | Category | Description |\n")
+	sb.WriteString("| :--- | :--- | :--- |\n")
+	for _, g := range groups {
+		for i := range g.Tools {
+			tool := &g.Tools[i]
+			paragraphs := strings.Split(strings.TrimSpace(tool.Description), "\n\n")
+			desc := firstSentence(paragraphs[0])
+			sb.WriteString(fmt.Sprintf("| [`%s`](#%s) | %s %s | %s |\n",
+				tool.Name, toolAnchor(tool.Name), g.Icon, g.Name, sanitizeTableCell(desc)))
+		}
+	}
+	sb.WriteString("\n")
+
+	// --- Type conventions note ---
 	sb.WriteString("> [!NOTE]\n")
 	sb.WriteString("> **Types in the tables** follow JSON Schema: `object` is a JSON object (string keys with JSON values); `object[]` is an array of those objects. Scalar types use their usual names (`string`, `number`, `boolean`, and so on). When a field has no explicit schema type (for example a Go `any` payload), this document shows `object` as shorthand for \"structured JSON,\" not a guarantee that only objects are returned at runtime.\n\n")
 
-	for i := range tools {
-		tool := &tools[i]
-		sb.WriteString(fmt.Sprintf("## `%s`\n\n", tool.Name))
+	// --- Table of Contents ---
+	sb.WriteString("## Table of Contents\n\n")
+	for _, g := range groups {
+		sb.WriteString(fmt.Sprintf("- **%s [%s](#%s)** (%d tools)\n",
+			g.Icon, g.Name, categoryAnchor(g.Name), len(g.Tools)))
+		for i := range g.Tools {
+			sb.WriteString(fmt.Sprintf("  - [`%s`](#%s)\n", g.Tools[i].Name, toolAnchor(g.Tools[i].Name)))
+		}
+	}
+	sb.WriteString("\n---\n\n")
 
-		// Parse description - first paragraph is the main description,
-		// subsequent paragraphs become usage tips
-		paragraphs := strings.Split(strings.TrimSpace(tool.Description), "\n\n")
-		sb.WriteString(fmt.Sprintf("> %s\n\n", strings.TrimSpace(paragraphs[0])))
+	// --- Tool sections by category ---
+	for gi, g := range groups {
+		id := categoryAnchor(g.Name)
+		sb.WriteString(fmt.Sprintf("<a id=%q></a>\n\n", id))
+		sb.WriteString(fmt.Sprintf("## %s %s\n\n", g.Icon, g.Name))
 
-		if len(paragraphs) > 1 {
-			sb.WriteString("**Usage Tips:**\n\n")
-			for _, para := range paragraphs[1:] {
-				// Join lines within a paragraph and create a single bullet
-				lines := strings.Split(para, "\n")
-				var joined []string
-				for _, line := range lines {
-					line = strings.TrimSpace(line)
-					if line != "" {
-						joined = append(joined, line)
+		for ti := range g.Tools {
+			tool := &g.Tools[ti]
+			sb.WriteString(fmt.Sprintf("### `%s`\n\n", tool.Name))
+
+			paragraphs := strings.Split(strings.TrimSpace(tool.Description), "\n\n")
+			mainDesc := strings.ReplaceAll(strings.TrimSpace(paragraphs[0]), "\n", "\n> ")
+			sb.WriteString(fmt.Sprintf("> %s\n\n", mainDesc))
+
+			// Usage tips in a collapsible section
+			if len(paragraphs) > 1 {
+				sb.WriteString("<details>\n<summary><strong>Usage Tips</strong></summary>\n\n")
+				for _, para := range paragraphs[1:] {
+					lines := strings.Split(para, "\n")
+					var joined []string
+					for _, line := range lines {
+						line = strings.TrimSpace(line)
+						if line != "" {
+							joined = append(joined, line)
+						}
+					}
+					if len(joined) > 0 {
+						sb.WriteString(fmt.Sprintf("- %s\n", strings.Join(joined, " ")))
 					}
 				}
-				if len(joined) > 0 {
-					sb.WriteString(fmt.Sprintf("- %s\n", strings.Join(joined, " ")))
+				sb.WriteString("\n</details>\n\n")
+			}
+
+			// Parameters
+			params := extractParams(tool)
+			if len(params) == 0 {
+				sb.WriteString("_No parameters._\n\n")
+			} else {
+				sb.WriteString("**Parameters:**\n\n")
+
+				var requiredRows, optionalRows [][]string
+				for _, p := range params {
+					row := []string{
+						fmt.Sprintf("`%s`", p.Name),
+						fmt.Sprintf("`%s`", p.Type),
+						p.Description,
+					}
+					if p.Required {
+						requiredRows = append(requiredRows, row)
+					} else {
+						optionalRows = append(optionalRows, row)
+					}
+				}
+
+				if len(requiredRows) > 0 {
+					sb.WriteString("**Required:**\n\n")
+					sb.WriteString(formatTable(
+						[]string{"Parameter", "Type", "Description"},
+						[]string{"l", "l", "l"},
+						requiredRows,
+					))
+					sb.WriteString("\n")
+				}
+
+				if len(optionalRows) > 0 {
+					sb.WriteString("<details>\n<summary><strong>Optional Parameters</strong></summary>\n\n")
+					sb.WriteString(formatTable(
+						[]string{"Parameter", "Type", "Description"},
+						[]string{"l", "l", "l"},
+						optionalRows,
+					))
+					sb.WriteString("\n</details>\n\n")
+				}
+
+				for _, p := range params {
+					if p.Pattern != "" {
+						sb.WriteString("> [!NOTE]\n")
+						sb.WriteString(fmt.Sprintf("> Parameters with patterns must match: `%s`\n\n", p.Pattern))
+						break
+					}
 				}
 			}
-			sb.WriteString("\n")
-		}
 
-		// Parameters
-		params := extractParams(tool)
-		if len(params) == 0 {
-			sb.WriteString(formatTable(
-				[]string{"", ""},
-				[]string{"l", "l"},
-				[][]string{{"**Parameters**", "None"}},
-			))
-			sb.WriteString("\n")
-		} else {
-			sb.WriteString("**Parameters:**\n\n")
-			var rows [][]string
-			for _, p := range params {
-				req := ""
-				if p.Required {
-					req = "✅"
+			// Output Schema
+			outputFields := extractOutputSchema(tool)
+			if len(outputFields) > 0 {
+				sb.WriteString("<details>\n<summary><strong>Output Schema</strong></summary>\n\n")
+				var rows [][]string
+				for _, f := range outputFields {
+					rows = append(rows, []string{
+						fmt.Sprintf("`%s`", f.Name),
+						fmt.Sprintf("`%s`", f.Type),
+						f.Description,
+					})
 				}
-				rows = append(rows, []string{
-					fmt.Sprintf("`%s`", p.Name),
-					fmt.Sprintf("`%s`", p.Type),
-					req,
-					p.Description,
-				})
+				sb.WriteString(formatTable(
+					[]string{"Field", "Type", "Description"},
+					[]string{"l", "l", "l"},
+					rows,
+				))
+				sb.WriteString("\n</details>\n\n")
 			}
-			sb.WriteString(formatTable(
-				[]string{"Parameter", "Type", "Required", "Description"},
-				[]string{"l", "l", "c", "l"},
-				rows,
-			))
-			sb.WriteString("\n")
 
-			for _, p := range params {
-				if p.Pattern != "" {
-					sb.WriteString("> [!NOTE]\n")
-					sb.WriteString(fmt.Sprintf("> Parameters with patterns must match: `%s`\n\n", p.Pattern))
-					break
-				}
+			// Separator between tools (but not after the very last tool)
+			isLastTool := gi == len(groups)-1 && ti == len(g.Tools)-1
+			if !isLastTool {
+				sb.WriteString("---\n\n")
 			}
-		}
-
-		// Output Schema
-		outputFields := extractOutputSchema(tool)
-		if len(outputFields) > 0 {
-			sb.WriteString("**Output Schema:**\n\n")
-			var rows [][]string
-			for _, f := range outputFields {
-				rows = append(rows, []string{
-					fmt.Sprintf("`%s`", f.Name),
-					fmt.Sprintf("`%s`", f.Type),
-					f.Description,
-				})
-			}
-			sb.WriteString(formatTable(
-				[]string{"Field", "Type", "Description"},
-				[]string{"l", "l", "l"},
-				rows,
-			))
-			sb.WriteString("\n")
-		}
-
-		if i < len(tools)-1 {
-			sb.WriteString("---\n\n")
 		}
 	}
 
