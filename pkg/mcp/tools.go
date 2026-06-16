@@ -9,19 +9,51 @@ import (
 	"github.com/rhobs/obs-mcp/pkg/traces"
 )
 
+// ToolGroup holds a named category of tools for documentation generation.
+type ToolGroup struct {
+	Name  string
+	Icon  string
+	Tools []mcp.Tool
+}
+
 // AllTools returns all available MCP tools.
 // When adding a new tool, add it to pkg/tools/definitions.go to keep both MCP and Toolset in sync, as well as docs.
 func AllTools() []mcp.Tool {
-	toolDefs := append(tools.AllTools(), traces.AllTools()...)
-	toolDefs = append(toolDefs, logs.AllTools()...)
-	toolDefs = append(toolDefs, otelcol.AllTools()...)
-	mcpTools := make([]mcp.Tool, len(toolDefs))
+	var all []mcp.Tool
+	for _, g := range GroupedTools() {
+		all = append(all, g.Tools...)
+	}
+	return all
+}
 
-	for i, toolDef := range toolDefs {
-		mcpTools[i] = *toolDef.ToMCPTool()
+// GroupedTools returns tools organized by category for documentation.
+func GroupedTools() []ToolGroup {
+	toMCP := func(defs []tools.ToolDefInterface) []mcp.Tool {
+		out := make([]mcp.Tool, len(defs))
+		for i, d := range defs {
+			out[i] = *d.ToMCPTool()
+		}
+		return out
 	}
 
-	return mcpTools
+	promDefs := tools.AllTools()
+	var promTools, alertTools []mcp.Tool
+	for _, t := range toMCP(promDefs) {
+		switch t.Name {
+		case "get_alerts", "get_silences":
+			alertTools = append(alertTools, t)
+		default:
+			promTools = append(promTools, t)
+		}
+	}
+
+	return []ToolGroup{
+		{Name: "Prometheus / Thanos", Icon: "📈", Tools: promTools},
+		{Name: "Alertmanager", Icon: "🔔", Tools: alertTools},
+		{Name: "Tempo (Distributed Tracing)", Icon: "🔍", Tools: toMCP(traces.AllTools())},
+		{Name: "Loki (Log Management)", Icon: "📋", Tools: toMCP(logs.AllTools())},
+		{Name: "OpenTelemetry Collector", Icon: "⚙️", Tools: toMCP(otelcol.AllTools())},
+	}
 }
 
 // Individual tool creation functions for backward compatibility and testing
