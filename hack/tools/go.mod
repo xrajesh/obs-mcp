@@ -1,6 +1,6 @@
 module github.com/rhobs/obs-mcp/hack/tools
 
-go 1.24.6
+go 1.26.3
 
 tool github.com/golangci/golangci-lint/v2/cmd/golangci-lint
 
